@@ -1,0 +1,4 @@
+interface:
+  display_name: "RSCC PHP Source Review"
+  short_description: "Review PHP folders or selected files with evidence"
+  default_prompt: "Use $rscc-php-source-review to review the folder or explicit file list I specify and save English findings and coverage reports under rscc."
