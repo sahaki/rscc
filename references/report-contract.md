@@ -1,0 +1,142 @@
+# English artifact contract
+
+## Folder-mode output tree
+
+```text
+<project-root>/rscc/<target-folder-name>/
+  inventory.json
+  file_notes.json
+  structure_file.md
+  <yyyymmdd_hhmm>/
+    inventory.json
+    file_notes.json
+    structure_file.md
+    review.json
+    standards.md
+    review-summary.md
+    file-review.md
+    findings.md
+    coverage.md
+```
+
+JSON files are machine-readable coverage checkpoints; Markdown files are the review deliverables. The top-level map always describes the latest scan; each run preserves its own snapshot. No application code is modified.
+
+## File-mode output tree
+
+```text
+<project-root>/rscc/file-reviews/<yyyymmdd_hhmm>/
+  inventory.json
+  review.json
+  standards.md
+  review-summary.md
+  file-review.md
+  findings.md
+  coverage.md
+```
+
+One selected file and a selected file list use the same workflow. No directory enumeration, `structure_file.md`, `file_notes.json`, or architecture write-up is needed. Existing folder-mode artifacts remain untouched. `inventory.json` records `mode: files`, `scope_policy: selected-files-only`, the root, absolute `selected_files`, and hashes for that exact selection. Ledger/finding paths are **project-relative** in file mode, and **target-relative** in folder mode. Do not convert file selections to a shared parent folder. The file list replaces the structure map as the required completeness ledger. File-mode reading attestations live in `review.json`'s `read_complete` fields, with no separate structure notes. Every selected file must have a supported outcome or an explicit blocker.
+
+## Mandatory source boundary
+
+The selected folder or exact selected file list is the sole source input. Project root is the output anchor only. In folder mode, for `/project/app/code/Acme/Orders`, write `/project/rscc/Orders/structure_file.md`; enumerate/read only the Orders folder. Folder inventories record `scope_policy: selected-target-only`, the absolute `target`, separate output-anchor `root`, and whether root scanning was explicitly requested. File-mode inventories use the contract above and do not trigger folder scans. No parent/sibling/root-wide discovery or contextual source reading is permitted. External dependencies may be mentioned as unverified references inferred from selected files but must not be opened, inventoried, or counted as inspected. Missing evidence is NEEDS VERIFICATION. Old reports are not an authority to widen a new run's scope.
+
+## Excluded scope
+
+Directory basenames `vendor`, `node_modules`, `build`, `.git`, `.github`, `.gitlab`, and `.gitea` are excluded recursively at every depth, together with the actual project `rscc` output tree. Excluded contents must not be enumerated, hashed, read, searched, or reviewed. Match exact directory names; similarly named directories and ordinary files (including `.gitignore`, `.gitattributes`, `.gitmodules`, and worktree `.git` pointer files) are not excluded. Never follow a worktree pointer into excluded metadata. Inventory records `excluded_directory_names` and encountered `excluded` paths without listing their contents. `structure_file.md`, `coverage.md`, and the summary must disclose these rules and paths. Excluded contents have no file review rows or PASS status, do not count as missing files, and are outside the coverage denominator. COMPLETE means complete for the remaining in-scope source only. Dependency manifests/lockfiles outside these directories remain in scope. CI/SDLC assessments that depend on excluded Git-hosting configuration require an explicit verification gap.
+
+## Structure notes
+
+For folder runs, `inventory.json` additionally records `gitignore_enabled`, `gitignore_files` (relative path, SHA-256, and active raw patterns/line numbers), and `gitignore_exclusions` (excluded path plus matching source/line/pattern). All ignore files are freshly read within the selected scope. `structure_file.md` and `coverage.md` must show the fixed exclusions, local rule table including negations, and actual excluded paths with reasons. Rules that currently match nothing are still disclosed. Excluded contents have no review rows and do not count as missing files or PASS. Local ignore metadata may be read/hashed even when the file excludes itself; metadata hashes also participate in drift detection. Parent/global ignore files and ignore files inside pruned directories are not consulted. File mode does not load folder ignore rules and keeps its explicit-file contract.
+
+`inventory` seeds `file_notes.json` as a JSON array, one object per entry. Keep `path` and `sha256` unchanged. Set `source_related` to a boolean based on actual inspection, `inspected` to true only after reading the entire file (or inspecting a passive asset), and fill the English fields `purpose`, `behavior`, `relationships`. For source, `behavior` describes actual functions/classes/hooks, inputs/outputs and side effects, and `relationships` names callers/dependencies and trust boundaries. For a binary/passive asset describe its role and inspection limits. If reading is blocked, keep `inspected: false`, explain the precise blocker, and conservatively set `source_related: true` if source relevance is unknown. Do not claim a link was read when only its destination name was seen.
+
+The helper validates bookkeeping and renders the structure map. It cannot establish that the AI actually read or understood a file. Each invocation must do that work again, even when content hashes match.
+
+## Review ledger
+
+`start` seeds `review.json`:
+
+```json
+{
+  "scan_id": "generated-by-helper",
+    "severity_policy": "rscc-severity-v1",
+  "files": [
+    {
+      "path": "Controller/Save.php",
+      "sha256": "preserve-generated-value",
+      "read_complete": false,
+      "status": "UNREVIEWED",
+      "checks": [],
+      "finding_ids": [],
+      "notes": ""
+    }
+  ],
+  "findings": []
+}
+```
+
+Each check is an object with `standard` (family/name), `reference` (verified versioned control/test ID, sheet URL, or explicitly unverified topic), `status`, and `evidence`. Evidence identifies the read file/current line range and relevant cross-file protection, or explains a verification gap. Use one or more checks for every reviewed source-related file, representing all applicable controls; never use a generic "OWASP checked" assertion. Record `finding_ids` for all findings affecting the file.
+
+| Status | Meaning |
+| --- | --- |
+| PASS | All assessed applicable controls for this file have supporting source evidence; no evaluated control fails or remains unverified. This is not whole-system compliance. |
+| FAIL | At least one assessed control fails with supported evidence and a linked finding. Other controls may still need verification. |
+| NEEDS VERIFICATION | Applicable evidence depends on unavailable host/runtime/configuration, or content cannot be fully read; never counted as PASS. |
+| NOT APPLICABLE | A passive/non-source file or a control outside the demonstrated scope, with a reason. A source-related file cannot be excluded wholesale this way. |
+| UNREVIEWED | Work remains; blocks complete source coverage. |
+
+Aggregate file status: FAIL when any check fails; otherwise NEEDS VERIFICATION when any check is unresolved; otherwise PASS when any check passes; source files must not have only NOT APPLICABLE checks. `read_complete` is independent of control verification. A fully read file can have unresolved runtime controls.
+
+## Findings
+
+Each finding requires:
+
+```json
+{
+  "id": "RSCC-001",
+  "category": "security",
+  "severity": "High",
+  "identity": {"path": "Controller/Save.php", "symbol": "App\\Controller\\Save", "mechanism": "missing-owner-authorization"},
+  "severity_assessment": {"policy": "rscc-severity-v1", "kind": "security", "impact": "sensitive", "reachability": "authenticated", "context_id": "source-only", "basis": "An authenticated customer's selected request path can update another customer's protected record without ownership authorization."},
+  "title": "Missing ownership check when updating a record",
+  "locations": [
+    {"path": "Controller/Save.php", "lines": "42-58", "evidence": "Minimal redacted code or precise source trace."}
+  ],
+  "standard_refs": ["Verified versioned ASVS ID and URL", "Verified CWE ID and URL"],
+  "description": "Observed behavior, triggering input, prerequisite roles, and source-to-sink path.",
+  "impact": "Concrete security or functional consequence.",
+  "remediation": "A scoped, implementable correction; do not apply it during this review.",
+  "acceptance_criteria": ["An objective regression or abuse-case check with the expected result."],
+  "confidence": "High",
+  "verification": "Source-confirmed; runtime reproduction not performed."
+}
+```
+
+Categories: `security`, `bug`, `issue`, `improve`, `verification-gap`, or another justified explicit category. Severity is calculated under [the versioned severity policy](severity-policy.md), not freely chosen. Every finding needs `identity` and `severity_assessment`; omit `severity` to let the helper calculate it, or supply the exact expected label. Improvements and verification gaps are Informational under this policy. Confidence remains `High`, `Medium`, or `Low` based on evidence and does not influence severity. The helper adds a stable key, records policy/facts in the report, and persists cross-run decisions to `<root>/rscc/severity_registry.json` only for complete stable-source runs. A classification change needs `severity_change` with the previous grade, type, reason, and concrete evidence; changing an ID/title or confidence does not justify a grade change. A potential exploit with missing decisive evidence is a verification gap rather than a confirmed security failure.
+
+Use unique stable IDs within a run. A cross-file flaw is one finding with multiple locations, linked from every affected file. Do not duplicate it to inflate counts. Include task-ready title, current/expected behavior, affected files/lines, impact, suggested correction, and measurable acceptance criteria. Do not create external task items.
+
+Numeric CVSS is optional security metadata. If supplied, add `cvss` with version, vector, score, scoring source/tool, and assumptions. The main Severity column remains the calculated RSCC policy label; do not replace it with CVSS or apply CVSS to ordinary functional bugs. Never invent a score, claim a CVE is assigned to local code, or label a published advisory applicable without version evidence.
+
+## Human-authored run documents
+
+Write `standards.md` with all nine required families, version/revision, stable/final status, official URL, accessed date, applicability, and limitations. Distinguish current published guidance from unavailable/draft material. Current versions must be rechecked, not copied from a prior run.
+
+Write `review-summary.md` with:
+
+1. Scope: exact output-anchor project root and sole source target, timestamp/timezone, scan ID, host/framework/PHP versions and their in-scope evidence, ASVS level and selected baseline, uninspected external dependencies, exclusions, and tools actually run. Do not describe out-of-target files as read or reviewed.
+2. A standards applicability table accounting for all nine reference families.
+3. In folder mode, an ASVS requirement matrix for the selected stable catalog/levels, with one row per requirement, status, evidence/files, and follow-up. In file mode, a matrix of controls relevant to the selected files, plus explicit unresolved host/project requirements; state that the parent module/project and full ASVS baseline were not assessed. Supplementary standard controls/tests get their own relevant rows. Catalog retrieval failure must be explicit; do not claim full baseline coverage.
+4. Cross-file execution/data flows, shared protections, assumptions, and unresolved runtime/host checks.
+5. Finding counts by type/severity and remediation order. Link to the generated `findings.md` for full task-ready details.
+6. A clear distinction between complete source reading, verified controls, and overall compliance. Even COMPLETE reading coverage does not imply zero vulnerabilities or certification.
+
+## Generated documents and completion
+
+`finish` produces:
+
+- `file-review.md`: one table row for **every** inventoried path, hash, source relevance, reading state, file status, check evidence, issue type/IDs, and notes. It also expands individual checks with references/evidence.
+- `findings.md`: finding index table plus detailed evidence, affected files/lines, type/severity/confidence, standards, remediation and acceptance criteria.
+- `coverage.md`: mode, scope/path base, snapshot counts, reviewed source count, unresolved/blocked paths, drift, exclusion boundary, and COMPLETE/INCOMPLETE reading coverage. In file mode only the explicit files are rehashed, and changes to neighboring/unselected files are outside this review. Unknown/unreadable/link entries remain explicit blockers.
+
+Do not manually relax helper failures or delete inventory rows to obtain COMPLETE. A missing ledger row, duplicate path, invalid status/finding linkage, changed snapshot, or inconsistent file/check outcome must be corrected or reported as incomplete. If the job cannot finish, still save partial documents with remaining paths and blockers. `finish` exits 2 after writing valid but incomplete reports, and 1 for invalid input; it is not a vulnerability scanner.
