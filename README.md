@@ -14,7 +14,7 @@ These are AI request examples using slash notation. The skill can also be named 
 /rscc-php-source-review /wp/wp-content/plugins/reepay-checkout-gateway/
 ```
 
-The skill reads this folder's `.gitignore` afresh on every run, then inventories only this folder, applies fixed and local ignore exclusions, and reads all remaining files. It creates or refreshes:
+The skill reads this folder's `.gitignore` afresh on every run, then inventories only this folder, applies fixed and local ignore exclusions, and sorts the remaining files into inspection tiers ([triage policy](references/triage-policy.md)): PHP, JS/TS, executable configuration and unknown files are read in full (T3); passive binaries (T1) and text assets such as CSS, translations, docs and lockfiles (T2) are covered by an automated scan unless a guard promotes them to T3. Use `--no-triage` on `inventory` for an exhaustive full read. It creates or refreshes:
 
 ```text
 /wp/rscc/reepay-checkout-gateway/structure_file.md
@@ -60,6 +60,7 @@ File-mode report paths are relative to the project root, so identical filenames 
 | File | Purpose |
 | --- | --- |
 | `inventory.json` | Exact selected scope, file hashes, exclusions, and scan/run metadata. In file mode this contains only the explicit file list. |
+| `triage.json` | Folder mode only: inspection tier (T1/T2/T3), mode, reason, and scan facts per file. |
 | `review.json` | Per-file reading state, checks, statuses, and finding associations. |
 | `standards.md` | Official standards sources, versions, access dates, applicability, and verification limitations. |
 | `review-summary.md` | Scope, control assessment, important flows, finding summary, and unresolved evidence. |
@@ -91,7 +92,7 @@ The skill checks current official releases on every run. References include OWAS
 | NOT APPLICABLE | A control or passive folder-inventory file is outside the demonstrated applicability, with a reason. |
 | UNREVIEWED | Review work remains. |
 
-File mode cannot prove that its parent module or project is secure. External dependencies are noted but not opened. COMPLETE means all required source files in the selected scope were fully read; it does not mean every control passed or the system is certified. Runtime testing requires an authorized environment.
+File mode cannot prove that its parent module or project is secure. External dependencies are noted but not opened. COMPLETE means all T3 files in the selected scope were fully read and all T1/T2 files passed their automated scan; it does not mean every control passed or the system is certified. Runtime testing requires an authorized environment.
 
 ## Repeatable severity ratings
 
@@ -121,11 +122,27 @@ python scripts/rscc.py structure --module-dir /wp/rscc/reepay-checkout-gateway
 python scripts/rscc.py start --module-dir /wp/rscc/reepay-checkout-gateway --utc-offset +07:00
 ```
 
-The AI fills `file_notes.json` before `structure`. For file mode, no structure step is needed:
+The AI fills the T3 rows of `file_notes.json` before `structure` (T1/T2 rows are pre-filled). To build grep/read batches that stay inside the inventory, list paths with:
+
+```text
+python scripts/rscc.py paths --module-dir /wp/rscc/reepay-checkout-gateway --tier T3 --ext php
+```
+ For file mode, no structure step is needed:
 
 ```text
 python scripts/rscc.py files --root /wp --file /wp/wp-content/plugins/reepay-checkout-gateway/aaa.php --file /wp/wp-content/plugins/reepay-checkout-gateway/bbb.php --utc-offset +07:00
 ```
+
+Efficiency helpers (folder mode):
+
+```text
+python scripts/rscc.py scan-patterns --module-dir /wp/rscc/reepay-checkout-gateway          # reading priorities, writes pattern_scan.json
+python scripts/rscc.py standards-check --run-dir <run> --write-standards                   # confirm cached standards, draft standards.md
+python scripts/rscc.py standards-check --refresh                                          # deep re-verification when the cache is older than 15 days
+python scripts/rscc.py asvs-matrix --run-dir <run> --level 2                               # asvs-matrix.md from asvs_features.json + asvs_overrides.json
+```
+
+The standards cache lives in `references/standards-cache.json`, the official ASVS 5.0.0 catalogue in `references/asvs-5.0.0.csv`, and the rule-based matrix defaults in `references/asvs-defaults.json`. Update them when `standards-check` reports a changed publisher version. The cache expires after `max_age_days` (15): a stale cache must be refreshed with `--refresh`, which only advances `verified_on` when every cached CWE title, cheat-sheet URL and the ASVS catalogue hash still match.
 
 After completing `review.json`, `standards.md`, and `review-summary.md`, render and reconcile either mode with:
 

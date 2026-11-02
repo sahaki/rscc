@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "verified_on": "2026-11-02",
+  "note": "Cached publisher facts verified on verified_on. 'standards-check' re-confirms the version markers each run with a few cheap requests. When the cache is older than max_age_days, run 'standards-check --refresh' for a deep re-verification (CWE titles, cheat-sheet URLs, ASVS catalogue hash); it updates verified_on only when everything still matches. If anything differs, browse the publisher and update this file by hand.",
+  "families": {
+    "asvs": {
+      "name": "OWASP ASVS",
+      "version": "5.0.0",
+      "released": "2025-05-30",
+      "status": "Stable",
+      "urls": [
+        "https://asvs.owasp.org/",
+        "https://github.com/OWASP/ASVS/releases/tag/v5.0.0_release"
+      ],
+      "catalog_file": "asvs-5.0.0.csv",
+      "catalog_sha256": "6124dba176dc563f66363a11ae0c47f9b86b8a4a84c66a793670bd196ed86cd5",
+      "catalog_counts": {
+        "total": 345,
+        "L1": 70,
+        "L2": 183,
+        "L3": 92
+      },
+      "check": {
+        "type": "github_release",
+        "repo": "OWASP/ASVS",
+        "expect_tag": "v5.0.0_release"
+      },
+      "limitations": "A rolling 'latest' bleeding-edge release exists; it is supplemental, not the baseline.",
+      "catalog_asset_url": "https://github.com/OWASP/ASVS/releases/download/v5.0.0_release/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv"
+    },
+    "top10": {
+      "name": "OWASP Top 10",
+      "version": "2025",
+      "status": "Published",
+      "urls": [
+        "https://owasp.org/Top10/2025/",
+        "https://top10.owasp.org/"
+      ],
+      "categories": {
+        "A01": "Broken Access Control",
+        "A02": "Security Misconfiguration",
+        "A03": "Software Supply Chain Failures",
+        "A04": "Cryptographic Failures",
+        "A05": "Injection",
+        "A06": "Insecure Design",
+        "A07": "Authentication Failures",
+        "A08": "Software or Data Integrity Failures",
+        "A09": "Security Logging and Alerting Failures",
+        "A10": "Mishandling of Exceptional Conditions"
+      },
+      "check": {
+        "type": "regex_max",
+        "url": "https://top10.owasp.org/",
+        "pattern": "Top 10:(20\\d\\d)",
+        "expect": "2025"
+      },
+      "limitations": "Awareness list, not a verification checklist."
+    },
+    "cheatsheets": {
+      "name": "OWASP Cheat Sheet Series",
+      "version": "living",
+      "status": "Living guidance",
+      "urls": [
+        "https://cheatsheetseries.owasp.org/"
+      ],
+      "sheets": {
+        "Authorization": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html",
+        "Insecure Direct Object Reference Prevention": "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html",
+        "Input Validation": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html",
+        "Cross Site Scripting Prevention": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+        "Logging": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html",
+        "Secrets Management": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+        "Cross-Site Request Forgery Prevention": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html",
+        "Error Handling": "https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html"
+      },
+      "check": {
+        "type": "reachable",
+        "url": "https://cheatsheetseries.owasp.org/"
+      },
+      "limitations": "No commit revision recorded."
+    },
+    "cwe": {
+      "name": "CWE",
+      "version": "5.0",
+      "status": "Published list",
+      "urls": [
+        "https://cwe.mitre.org/data/index.html"
+      ],
+      "titles": {
+        "20": "Improper Input Validation",
+        "74": "Improper Neutralization of Special Elements in Output Used by a Downstream Component",
+        "79": "Improper Neutralization of Input During Web Page Generation",
+        "200": "Exposure of Sensitive Information to an Unauthorized Actor",
+        "201": "Insertion of Sensitive Information Into Sent Data",
+        "266": "Incorrect Privilege Assignment",
+        "285": "Improper Authorization",
+        "367": "Time-of-check Time-of-use (TOCTOU) Race Condition",
+        "400": "Uncontrolled Resource Consumption",
+        "476": "NULL Pointer Dereference",
+        "532": "Insertion of Sensitive Information into Log File",
+        "602": "Client-Side Enforcement of Server-Side Security",
+        "639": "Authorization Bypass Through User-Controlled Key",
+        "754": "Improper Check for Unusual or Exceptional Conditions",
+        "840": "CWE Grouping: Business Logic Errors",
+        "862": "Missing Authorization",
+        "863": "Incorrect Authorization",
+        "1104": "Use of Unmaintained Third Party Components"
+      },
+      "check": {
+        "type": "regex_max",
+        "url": "https://cwe.mitre.org/data/index.html",
+        "pattern": "CWE List Version (\\d+\\.\\d+)",
+        "expect": "5.0"
+      },
+      "limitations": "Mappings are reviewer judgement. IDs not in 'titles' must be verified at https://cwe.mitre.org/data/definitions/<id>.html before use."
+    },
+    "cvss": {
+      "name": "CVE / CVSS",
+      "version": "CVSS v4.0",
+      "status": "Published",
+      "urls": [
+        "https://www.cve.org/",
+        "https://www.first.org/cvss/"
+      ],
+      "check": {
+        "type": "regex_max",
+        "url": "https://www.first.org/cvss/",
+        "pattern": "CVSS v(\\d\\.\\d)",
+        "expect": "4.0"
+      },
+      "limitations": "No CVE is assigned to local findings; numeric scores need a verified vector."
+    },
+    "wstg": {
+      "name": "OWASP WSTG",
+      "version": "4.2",
+      "status": "Stable 4.2; 5.0 in development",
+      "urls": [
+        "https://owasp.org/www-project-web-security-testing-guide/",
+        "https://owasp.org/www-project-web-security-testing-guide/v42/"
+      ],
+      "check": {
+        "type": "regex_contains",
+        "url": "https://owasp.org/projects/web-security-testing-guide",
+        "pattern": "release version 5\\.0",
+        "expect": "present"
+      },
+      "limitations": "Test IDs are follow-up suggestions; no tests executed."
+    },
+    "cis": {
+      "name": "CIS Benchmarks",
+      "version": "per product",
+      "status": "Published",
+      "urls": [
+        "https://www.cisecurity.org/cis-benchmarks"
+      ],
+      "check": {
+        "type": "reachable",
+        "url": "https://www.cisecurity.org/cis-benchmarks"
+      },
+      "limitations": "Catalogue (2026-11-02) lists Apache HTTP Server 2.4, NGINX, MariaDB 10.6/10.11, Ubuntu 22.04/24.04, Debian 12, Docker; no PHP or WordPress benchmark. Depends on the deployed OS/server profile; not assessable from source."
+    },
+    "ssdf": {
+      "name": "NIST SSDF",
+      "version": "SP 800-218 v1.1",
+      "status": "Final (SP 800-218A profile also final)",
+      "urls": [
+        "https://csrc.nist.gov/projects/ssdf",
+        "https://csrc.nist.gov/pubs/sp/800/218/final"
+      ],
+      "check": {
+        "type": "regex_contains",
+        "url": "https://csrc.nist.gov/pubs/sp/800/218/final",
+        "pattern": "Version 1\\.1",
+        "expect": "present"
+      },
+      "limitations": "Organisation-wide practices and excluded CI folders cannot be assessed from module source."
+    },
+    "pci": {
+      "name": "PCI DSS",
+      "version": "4.0.1",
+      "status": "Current",
+      "urls": [
+        "https://www.pcisecuritystandards.org/document_library/"
+      ],
+      "check": {
+        "type": "regex_max",
+        "url": "https://www.pcisecuritystandards.org/document_library/",
+        "pattern": "PCI DSS v(\\d\\.\\d(?:\\.\\d)?)",
+        "expect": "4.0.1"
+      },
+      "limitations": "Cardholder-data scope must be determined by the merchant/QSA."
+    },
+    "php": {
+      "name": "PHP supported versions",
+      "version": "8.2-8.5",
+      "status": "8.2 security until 2026-12-31; 8.3 until 2027-12-31; 8.4 until 2028-12-31; 8.5 until 2029-12-31",
+      "urls": [
+        "https://www.php.net/supported-versions.php"
+      ],
+      "check": {
+        "type": "reachable",
+        "url": "https://www.php.net/supported-versions.php"
+      },
+      "limitations": "Supplementary reference."
+    }
+  },
+  "max_age_days": 15
+}

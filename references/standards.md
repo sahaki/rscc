@@ -1,6 +1,6 @@
 # Standards selection and evidence
 
-Verify these official entry points on every run. The observations below were checked on **2026-11-02**, not promised future versions. Follow publisher links to the actual stable/final requirement text; capture exact versions and IDs in the run's `standards.md`. Never invent an identifier or map numbering across releases from memory.
+Verify these official entry points on every run. The machine-readable copy of these facts is [standards-cache.json](standards-cache.json); `rscc.py standards-check` confirms its version markers and drafts `standards.md`. Keep this table and the cache consistent when a publisher changes. The observations below were checked on **2026-11-02**, not promised future versions. Follow publisher links to the actual stable/final requirement text; capture exact versions and IDs in the run's `standards.md`. Never invent an identifier or map numbering across releases from memory.
 
 | Reference family | Official source | Baseline observed / use |
 | --- | --- | --- |

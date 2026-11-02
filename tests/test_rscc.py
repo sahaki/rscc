@@ -121,7 +121,12 @@ class CoverageTests(unittest.TestCase):
         self.call('inventory', '--root', self.root, '--target', self.target)
         self.assertNotEqual(old_id, self.read(self.module / 'inventory.json')['scan_id'])
         self.assertTrue(self.run.is_dir())
-        self.assertTrue(all(r['inspected'] is False for r in self.read(self.module / 'file_notes.json')))
+        tiers = self.read(self.module / 'triage.json')
+        notes = self.read(self.module / 'file_notes.json')
+        # Earlier reading is never carried over: every full-read (T3) row starts uninspected again.
+        self.assertTrue(all(r['inspected'] is False for r in notes if tiers[r['path']]['tier'] == 'T3'))
+        # Only automated-scan tiers (T1/T2) are pre-filled.
+        self.assertTrue(all(tiers[r['path']]['tier'] != 'T3' for r in notes if r['inspected']))
 
     def test_output_is_not_recursively_inventoried(self):
         self.call('inventory', '--root', self.root, '--target', self.root, '--allow-project-root')

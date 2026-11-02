@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 sys.dont_write_bytecode = True
 from severity import POLICY as SEVERITY_POLICY, assess as assess_severity, reconcile as reconcile_severity
+import triage as triage_policy
+import extras
 
 
 STATUSES = {"PASS", "FAIL", "NEEDS VERIFICATION", "NOT APPLICABLE", "UNREVIEWED"}
@@ -249,6 +251,21 @@ def exclusions_document(inv):
     return document
 
 
+def triage_entries(target, entries, enabled=True):
+    """Map relative path -> triage record. T3 (full read) for anything not safely classified."""
+    result = {}
+    for r in entries:
+        info = {"tier": "T3", "mode": "full", "reason": "triage disabled" if not enabled else "unreadable or non-regular entry", "facts": {}}
+        if enabled and r["kind"] == "file" and not r["error"]:
+            try:
+                info = triage_policy.classify(Path(target) / r["path"], r["path"], r["size"] or 0)
+            except OSError:
+                info = {"tier": "T3", "mode": "full", "reason": "unreadable during triage", "facts": {}}
+        info["sha256"] = r["sha256"]
+        result[r["path"]] = info
+    return result
+
+
 def inventory(args):
     root = Path(args.root).resolve(strict=True)
     target = Path(args.target).resolve(strict=True)
@@ -263,9 +280,23 @@ def inventory(args):
     entries = snapshot(root, target, excluded=excluded, allow_project_root=args.allow_project_root, gitignore_files=ignore_records, gitignore_exclusions=ignore_matches)
     module.mkdir(parents=True, exist_ok=True)
     inv = {"scan_id": str(uuid4()), "root": str(root), "target": str(target), "scope_policy": "selected-target-only", "project_root_scan_explicit": args.allow_project_root, "module_name": module_name, "inventoried_at": datetime.now(timezone.utc).isoformat(), "excluded_directory_names": list(EXCLUDED_DIRECTORY_NAMES), "gitignore_enabled": True, "gitignore_files": ignore_records, "gitignore_exclusions": ignore_matches, "excluded": excluded, "entries": entries}
+    triage_rows = triage_entries(target, entries, enabled=not args.no_triage)
+    inv["triage_policy"] = triage_policy.POLICY if not args.no_triage else "disabled"
     write(module / "inventory.json", inv)
-    write(module / "file_notes.json", [{"path": r["path"], "sha256": r["sha256"], "source_related": None, "inspected": False, "purpose": "", "behavior": "", "relationships": ""} for r in entries])
-    print(json.dumps({"project_root_output_anchor": str(root), "scan_target": str(target), "structure_file": str(module / "structure_file.md"), "module_dir": str(module), "scan_id": inv["scan_id"], "files": len(entries)}))
+    write(module / "triage.json", triage_rows)
+    notes = []
+    for r in entries:
+        t = triage_rows[r["path"]]
+        row = {"path": r["path"], "sha256": r["sha256"], "source_related": None, "inspected": False, "purpose": "", "behavior": "", "relationships": ""}
+        if t["tier"] != "T3":
+            source, purpose, behavior, rel = triage_policy.seeds(r["path"], t)
+            row.update(source_related=source, inspected=True, purpose=purpose, behavior=behavior, relationships=rel)
+        notes.append(row)
+    write(module / "file_notes.json", notes)
+    tiers = {}
+    for t in triage_rows.values():
+        tiers[t["tier"]] = tiers.get(t["tier"], 0) + 1
+    print(json.dumps({"project_root_output_anchor": str(root), "scan_target": str(target), "structure_file": str(module / "structure_file.md"), "module_dir": str(module), "scan_id": inv["scan_id"], "files": len(entries), "tiers": tiers, "triage": inv["triage_policy"]}))
 
 
 def structure(args):
@@ -304,8 +335,20 @@ def new_run(module, now):
     return run
 
 
-def seed_review(run, inv):
-    write(run / "review.json", {"scan_id": inv["scan_id"], "severity_policy": SEVERITY_POLICY, "files": [{"path": r["path"], "sha256": r["sha256"], "read_complete": False, "status": "UNREVIEWED", "checks": [], "finding_ids": [], "notes": ""} for r in inv["entries"]], "findings": []})
+def seed_review(run, inv, triage_rows=None):
+    triage_rows = triage_rows or {}
+    files = []
+    for r in inv["entries"]:
+        row = {"path": r["path"], "sha256": r["sha256"], "read_complete": False, "status": "UNREVIEWED", "checks": [], "finding_ids": [], "notes": "", "inspection_mode": "full"}
+        t = triage_rows.get(r["path"])
+        if t and t["tier"] != "T3" and t.get("sha256") == r["sha256"]:
+            row.update(read_complete=True, inspection_mode=t["mode"], notes=f"Tier {t['tier']} ({t['mode']}) by policy {triage_policy.POLICY}: {t['reason']}.")
+            if t.get("lockfile"):
+                row.update(status="NEEDS VERIFICATION", checks=[{"standard": "OWASP ASVS 5.0.0", "reference": "V15.1.1 / V15.2.1 (dependency advisories)", "status": "NEEDS VERIFICATION", "evidence": "Lockfile structure parsed by script; run the ecosystem audit and replace this check with its result."}])
+            else:
+                row.update(status="NOT APPLICABLE")
+        files.append(row)
+    write(run / "review.json", {"scan_id": inv["scan_id"], "severity_policy": SEVERITY_POLICY, "files": files, "findings": []})
 
 
 def validate_selected_path(root, path):
@@ -367,7 +410,9 @@ def start(args):
     write(run / "inventory.json", inv)
     for filename in ("file_notes.json", "structure_file.md"):
         write(run / filename, (module / filename).read_text(encoding="utf-8"))
-    seed_review(run, inv)
+    triage_rows = load(module / "triage.json") if (module / "triage.json").exists() else {}
+    write(run / "triage.json", triage_rows)
+    seed_review(run, inv, triage_rows)
     print(str(run))
 
 
@@ -393,6 +438,7 @@ def finish(args):
         notes = notes_for(run, inv)
     review = load(run / "review.json")
     require(review["scan_id"] == inv["scan_id"], "Review belongs to a different scan")
+    triage_rows = load(run / "triage.json") if (run / "triage.json").exists() and not file_mode else {}
     expected = {row["path"]: row for row in inv["entries"]}
     files = index(review["files"], expected, "review ledger")
     if file_mode:
@@ -414,6 +460,11 @@ def finish(args):
             require(finding["id"] in files[location["path"]]["finding_ids"], "Finding missing from affected file ledger")
     for path, row in files.items():
         require(row["status"] in STATUSES and type(row["read_complete"]) is bool, f"Invalid review state: {path}")
+        mode = row.get("inspection_mode", "full")
+        require(mode in {"full", "scanned", "metadata"}, f"Invalid inspection_mode: {path}")
+        if mode != "full":
+            t = triage_rows.get(path)
+            require(t and t["tier"] != "T3" and t.get("sha256") == expected[path]["sha256"] and t["mode"] == mode, f"Only triage tier T1/T2 files may be recorded as {mode}; read this file in full: {path}")
         require(not row["read_complete"] or (notes[path]["inspected"] and expected[path]["kind"] == "file" and not expected[path]["error"]), f"Cannot claim full reading of blocked entry: {path}")
         require(isinstance(row.get("notes"), str) and row["notes"].strip(), f"Review notes missing: {path}")
         for fid in row["finding_ids"]:
@@ -440,13 +491,13 @@ def finish(args):
         drift = True
     source = [p for p in files if notes[p]["source_related"]]
     blocked = [p for p, row in files.items() if row["status"] == "UNREVIEWED" or expected[p]["kind"] != "file" or expected[p]["error"] or (p in source and not row["read_complete"])]
-    docs_missing = [name for name in ("standards.md", "review-summary.md") if not (run / name).is_file() or not (run / name).read_text(encoding="utf-8").strip()]
+    docs_missing = [name for name in ("standards.md", "review-summary.md") if not (run / name).is_file() or not (run / name).read_text(encoding="utf-8").strip() or "TODO: complete before finish" in (run / name).read_text(encoding="utf-8")]
     complete = bool(source) and not drift and not blocked and not docs_missing
     reconcile_severity(findings, inv, safe_output(Path(inv["root"]) / "rscc" / "severity_registry.json"), persist=complete)
     review["severity_policy"] = SEVERITY_POLICY
     write(run / "review.json", review)
     file_doc = "# File-by-file review\n\nPASS applies only to assessed controls in this source snapshot. Excluded directory contents are outside this table and its coverage counts; see coverage.md for the scope boundary.\n\n"
-    file_doc += table(["File", "SHA-256", "Source", "Fully read", "Status", "Types / findings", "Evidence / notes"], [[p, r["sha256"] or "Unavailable", notes[p]["source_related"], r["read_complete"], r["status"], "; ".join(f"{finding_map[i]['category']}: {i}" for i in r["finding_ids"]) or "None recorded", r["notes"]] for p, r in files.items()])
+    file_doc += table(["File", "SHA-256", "Source", "Inspection", "Status", "Types / findings", "Evidence / notes"], [[p, r["sha256"] or "Unavailable", notes[p]["source_related"], r.get("inspection_mode", "full") if r["read_complete"] else "not read", r["status"], "; ".join(f"{finding_map[i]['category']}: {i}" for i in r["finding_ids"]) or "None recorded", r["notes"]] for p, r in files.items()])
     for p, row in files.items():
         file_doc += f"\n## {md(p)}\n\n" + table(["Standard", "Reference", "Status", "Evidence"], [[c["standard"], c["reference"], c["status"], c["evidence"]] for c in row["checks"]])
     write(run / "file-review.md", file_doc)
@@ -466,13 +517,50 @@ def finish(args):
             finding_doc += "\nCVSS: " + md(json.dumps(f["cvss"])) + "\n"
     write(run / "findings.md", finding_doc)
     coverage = f"# Coverage\n\nSource reading coverage: **{'COMPLETE' if complete else 'INCOMPLETE'}**\n\n"
-    coverage += table(["Measure", "Value"], [["Mode", "Explicit files" if file_mode else "Folder"], ["Target", "; ".join(inv["selected_files"]) if file_mode else inv["target"]], ["Path base", inv["root"] if file_mode else inv["target"]], ["Scan ID", inv["scan_id"]], ["Run time", inv["run_at"]], ["Inventoried entries", len(files)], ["Source-related files", len(source)], ["Fully read source files", sum(files[p]["read_complete"] for p in source)], ["Unresolved control files", sum(r["status"] == "NEEDS VERIFICATION" for r in files.values())], ["Source drift", drift], ["Missing narrative documents", ", ".join(docs_missing) or "None"], ["Excluded output tree", inv["excluded"][0]]])
+    coverage += table(["Measure", "Value"], [["Mode", "Explicit files" if file_mode else "Folder"], ["Target", "; ".join(inv["selected_files"]) if file_mode else inv["target"]], ["Path base", inv["root"] if file_mode else inv["target"]], ["Scan ID", inv["scan_id"]], ["Run time", inv["run_at"]], ["Inventoried entries", len(files)], ["Source-related files", len(source)], ["Fully read source files", sum(files[p]["read_complete"] and files[p].get("inspection_mode", "full") == "full" for p in source)], ["Entries by inspection mode", ", ".join(f"{m}={sum(r.get('inspection_mode', 'full') == m and r['read_complete'] for r in files.values())}" for m in ("full", "scanned", "metadata"))], ["Triage policy", inv.get("triage_policy", "none (all entries read in full)")], ["Unresolved control files", sum(r["status"] == "NEEDS VERIFICATION" for r in files.values())], ["Source drift", drift], ["Missing narrative documents", ", ".join(docs_missing) or "None"], ["Excluded output tree", inv["excluded"][0]]])
     coverage += "\n## Exclusions\n\n" + exclusions_document(inv)
     coverage += "\n## Remaining or blocked entries\n\n" + ("\n".join("- " + md(p) for p in blocked) if blocked else "None.")
     coverage += "\n\nThis is a bookkeeping check, not proof of secure implementation, standards completeness, runtime verification, or certification. Consult the standards/control matrix and verification gaps in review-summary.md.\n"
     write(run / "coverage.md", coverage)
     print(json.dumps({"run": str(run), "source_coverage": "COMPLETE" if complete else "INCOMPLETE", "drift": drift, "blocked": blocked, "findings": len(findings)}))
     return 0 if complete else 2
+
+
+def paths(args):
+    """Print absolute in-scope paths (one per line) for allow-listed searches; never searches outside the inventory."""
+    module, inv = base(args.module_dir)
+    triage_rows = load(module / "triage.json") if (module / "triage.json").exists() else {}
+    wanted_ext = {e.lower() if e.startswith(".") else "." + e.lower() for e in args.ext}
+    for row in inv["entries"]:
+        if row["kind"] != "file" or row["error"]:
+            continue
+        tier = triage_rows.get(row["path"], {}).get("tier", "T3")
+        if args.tier and tier != args.tier:
+            continue
+        if wanted_ext and Path(row["path"]).suffix.lower() not in wanted_ext:
+            continue
+        print(str(Path(inv["target"]) / row["path"]))
+    return 0
+
+
+def scan_patterns_cmd(args):
+    module, inv = base(args.module_dir)
+    triage_rows = load(module / "triage.json") if (module / "triage.json").exists() else {}
+    return extras.scan_patterns(args, inv, triage_rows, module)
+
+
+def asvs_matrix_cmd(args):
+    run = safe_output(args.run_dir)
+    require((run / "inventory.json").exists(), "Run directory has no inventory.json")
+    return extras.asvs_matrix(args)
+
+
+def standards_check_cmd(args):
+    if args.run_dir:
+        run = safe_output(args.run_dir)
+        require((run / "inventory.json").exists(), "Run directory has no inventory.json")
+        require(not (args.write_standards and (run / "standards.md").exists() and not args.force), "standards.md exists; pass --force to overwrite")
+    return extras.standards_check(args)
 
 
 def main():
@@ -482,6 +570,7 @@ def main():
     inv.add_argument("--root", required=True)
     inv.add_argument("--target", required=True)
     inv.add_argument("--output-name", help="Use only for an explicit user-approved basename-collision alias")
+    inv.add_argument("--no-triage", action="store_true", help="Disable inspection tiers: every file must be read in full")
     inv.add_argument("--allow-project-root", action="store_true", help="Use only when the user explicitly selected the whole project root as the target")
     selected = commands.add_parser("files", help="Start a review of explicitly listed files without a directory scan or structure map")
     selected.add_argument("--root", required=True)
@@ -493,9 +582,27 @@ def main():
         if name == "start":
             sub.add_argument("--utc-offset", required=True)
     commands.add_parser("finish").add_argument("--run-dir", required=True)
+    pth = commands.add_parser("paths", help="List inventoried absolute paths for allow-listed grep/read batches")
+    pth.add_argument("--module-dir", required=True)
+    pth.add_argument("--tier", choices=["T1", "T2", "T3"])
+    pth.add_argument("--ext", action="append", default=[])
+    scan = commands.add_parser("scan-patterns", help="Allow-listed regex scan of T3 files to prioritise reading (does not replace reading)")
+    scan.add_argument("--module-dir", required=True)
+    scan.add_argument("--top", type=int, default=15)
+    mat = commands.add_parser("asvs-matrix", help="Render asvs-matrix.md from the cached catalogue, asvs_features.json and asvs_overrides.json in the run")
+    mat.add_argument("--run-dir", required=True)
+    mat.add_argument("--level", choices=["1", "2", "3"], default="2")
+    std = commands.add_parser("standards-check", help="Confirm cached standards versions with a few cheap requests")
+    std.add_argument("--run-dir")
+    std.add_argument("--write-standards", action="store_true", help="Render a standards.md draft into the run from the cache")
+    std.add_argument("--force", action="store_true")
+    std.add_argument("--offline", action="store_true")
+    std.add_argument("--timeout", type=int, default=20)
+    std.add_argument("--refresh", action="store_true", help="Deep re-verification (CWE titles, cheat-sheet URLs, ASVS catalogue hash); updates verified_on only if everything matches")
+    std.add_argument("--max-age-days", type=int, help="Override the cache age limit (default from standards-cache.json, 15)")
     args = parser.parse_args()
     try:
-        return {"inventory": inventory, "files": files_mode, "structure": structure, "start": start, "finish": finish}[args.command](args) or 0
+        return {"inventory": inventory, "files": files_mode, "structure": structure, "start": start, "finish": finish, "paths": paths, "scan-patterns": scan_patterns_cmd, "asvs-matrix": asvs_matrix_cmd, "standards-check": standards_check_cmd}[args.command](args) or 0
     except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         print(f"RSCC blocked: {exc}", file=sys.stderr)
         return 1

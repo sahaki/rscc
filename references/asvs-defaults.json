@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "catalog": "asvs-5.0.0.csv",
+  "note": "Rule-based starting dispositions for the ASVS matrix. 'features' entries apply NOT APPLICABLE only when the reviewer declares the feature absent (false) in asvs_features.json. 'host' and 'documentation' entries apply NEEDS VERIFICATION. Reviewer overrides always win. No rule ever produces PASS.",
+  "features": {
+    "file_handling": {"ids": ["V5"], "reason": "No file upload, file serving or archive handling in scope."},
+    "own_authentication": {"ids": ["V6", "V16.3.1"], "reason": "Scope implements no authentication; the host framework authenticates users (not assessed)."},
+    "own_sessions": {"ids": ["V7"], "reason": "Scope implements no session or session-token management; the host framework does (not assessed)."},
+    "self_contained_tokens": {"ids": ["V9"], "reason": "No self-contained tokens (JWT/SAML-like) are issued or consumed."},
+    "oauth_oidc": {"ids": ["V10"], "reason": "No OAuth/OIDC client, authorization server or resource server in scope."},
+    "cryptography": {"ids": ["V11"], "reason": "Scope implements no cryptography of its own (transport TLS is provided by the platform HTTP client)."},
+    "webrtc": {"ids": ["V17"], "reason": "No WebRTC functionality."},
+    "graphql": {"ids": ["V4.3"], "reason": "No GraphQL endpoint."},
+    "websockets": {"ids": ["V4.4"], "reason": "No WebSocket endpoint."},
+    "xml_parsing": {"ids": ["V1.5.1"], "reason": "No XML parsing in scope."},
+    "os_commands": {"ids": ["V1.2.5"], "reason": "No OS command execution (no exec/system/shell_exec/passthru/proc_open)."},
+    "ldap_xpath_latex_regex_building": {"ids": ["V1.2.6", "V1.2.7", "V1.2.8", "V1.2.9"], "reason": "No LDAP, XPath, LaTeX or dynamic regular-expression construction from untrusted data."},
+    "sets_cookies": {"ids": ["V3.3"], "reason": "Scope sets no cookies of its own (host framework cookies not assessed)."},
+    "user_supplied_urls": {"ids": ["V1.3.6"], "reason": "No user-supplied URL is fetched server-side; outbound hosts are fixed."},
+    "rich_text_and_templates": {"ids": ["V1.3.4", "V1.3.5", "V1.3.7"], "reason": "No user-supplied SVG, scriptable templates or template injection surface."},
+    "jndi_memcache_mail": {"ids": ["V1.3.8", "V1.3.9", "V1.3.11"], "reason": "No JNDI, memcache or direct mail composition from untrusted input."},
+    "multi_tenancy": {"ids": ["V8.4.1"], "reason": "Single-tenant scope."},
+    "field_level_authorization": {"ids": ["V8.2.3"], "reason": "No field-level authorization model."},
+    "postmessage_cross_origin": {"ids": ["V3.5.2", "V3.5.4", "V3.5.5"], "reason": "No CORS-preflight contract, multi-host isolation or postMessage use."},
+    "internal_service_tls": {"ids": ["V12.3.3", "V12.3.4", "V12.1.3"], "reason": "No internal service-to-service channel or mTLS in scope."},
+    "proxy_ip_handling": {"ids": ["V15.3.4"], "reason": "Scope does not implement proxy/middleware IP handling."}
+  },
+  "memory_safe_language": {"ids": ["V1.4"], "reason": "PHP/JavaScript are memory-managed languages."},
+  "host": {
+    "ids": ["V3.4", "V4.1.3", "V4.2.1", "V12.1.1", "V12.1.2", "V12.2", "V13.2.5", "V13.4.3", "V13.4.4", "V13.4.5", "V16.2.2", "V16.4.2", "V16.4.3"],
+    "reason": "Host/web-server/platform control (headers, TLS, egress, logging infrastructure); verify on the deployed system."
+  },
+  "documentation": {
+    "ids": ["V2.1", "V8.1", "V11.1", "V14.1", "V15.1.1", "V15.1.3", "V16.1.1"],
+    "reason": "Requires design/policy documentation that is not in the selected scope."
+  },
+  "default": {"status": "NEEDS VERIFICATION", "reason": "Not separately assessed; no direct evidence recorded.", "follow_up": "Assess at runtime or with design evidence."}
+}
